@@ -1,0 +1,40 @@
+<h3>Glossary</h3>
+
+<p><b>AQS (EPA Air Quality System)</b>: EPA system of record for air monitoring data; includes annual summaries. Not real-time (this is historical monitoring data).</p>
+
+<p><b>PLACES (CDC)</b>: Model-based local estimates (MRP) of health outcomes and risk factors, derived from BRFSS and other inputs. Treat as snapshot estimates, not county trend series.</p>
+
+<p><b>SVI (CDC/ATSDR Social Vulnerability Index)</b>: Relative percentile rankings of vulnerability (0-1). Higher means more vulnerable relative to other counties. Not directly comparable across years.</p>
+
+<p><b>CBI (Compound Burden Index)</b>: A composite "burden" score combining standardized pollution, health burden, and vulnerability.</p>
+
+<h3>Metrics (Plain English)</h3>
+
+<ul>
+  <li><b>PM2.5 (annual mean)</b>: The county's annual average fine particulate concentration (ug/m3) from EPA AQS monitors (aggregated to county-year). Many counties have no monitors and show NA.</li>
+  <li><b>Ozone (annual mean)</b>: The county's annual average ozone concentration (ppb) from EPA AQS monitors (aggregated to county-year). Many counties have no monitors and show NA.</li>
+  <li><b>Asthma (PLACES age-adjusted %)</b>: CDC PLACES modeled asthma prevalence (percent) for a single snapshot year.</li>
+  <li><b>COPD (PLACES age-adjusted %)</b>: CDC PLACES modeled COPD prevalence (percent) for a single snapshot year.</li>
+  <li><b>SVI overall (percentile)</b>: Overall social vulnerability percentile (0-1) from CDC/ATSDR SVI.</li>
+</ul>
+
+<h3>CBI Details</h3>
+
+<p><b>CBI (z-score)</b> is a weighted combination of standardized components:</p>
+
+<ul>
+  <li>40% PM2.5 (anchor year)</li>
+  <li>20% Ozone (anchor year)</li>
+  <li>20% Asthma (PLACES)</li>
+  <li>20% SVI (SVI year)</li>
+</ul>
+
+<p>Counties only get a CBI score if all four components are available.</p>
+
+<h3>Guardrails</h3>
+
+<ul>
+  <li>Not real-time: AQS is not live air quality.</li>
+  <li>Not causal: maps and charts are descriptive (associations only).</li>
+  <li>PLACES is modeled: not intended for county trend inference.</li>
+</ul>

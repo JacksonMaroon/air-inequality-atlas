@@ -75,7 +75,9 @@ ui <- bslib::page_navbar(
     shiny::helpText("All results are descriptive/associational (non-causal)."),
     selectInput("state_filter", "State filter", choices = c("All (US)" = "ALL"), selected = "ALL"),
     selectInput("metric", "Metric", choices = metric_choices, selected = "cbi"),
+    uiOutput("metric_help"),
     uiOutput("year_ui"),
+    shiny::helpText("Tip: click a county on the map to set the Active County used in County Profile."),
     selectizeInput(
       "county_search",
       "County search",
@@ -137,6 +139,9 @@ ui <- bslib::page_navbar(
     div(
       class = "tab-pad",
       h3("Data & Methods"),
+      h4("Glossary / How To Interpret"),
+      htmltools::includeHTML("www/glossary.html"),
+      div(class = "spacer"),
       uiOutput("methods_vintages"),
       div(class = "spacer"),
       h4("Limitations (Must Read)"),
@@ -219,6 +224,58 @@ server <- function(input, output, session) {
     }
     active_fips5(f)
   }, ignoreInit = TRUE)
+
+  output$metric_help <- renderUI({
+    if (length(missing) > 0) return(NULL)
+    mk <- input$metric
+    if (is.null(mk) || mk == "") mk <- "cbi"
+
+    blurb <- switch(
+      mk,
+      cbi = tagList(
+        tags$p(
+          "CBI is a composite burden score built from standardized (z-scored) components:",
+          tags$b(" 40% PM2.5 + 20% Ozone + 20% Asthma + 20% SVI"),
+          "."
+        ),
+        tags$p(
+          "CBI uses a pollution anchor year of ",
+          tags$b(as.character(vintages$aqs$anchor_year)),
+          " so the composite is consistent even when you move the AQS year slider."
+        ),
+        tags$p("Coverage counts counties with all four components available.")
+      ),
+      pm25 = tagList(
+        tags$p("PM2.5 is the annual mean fine-particulate concentration from EPA AQS monitors, aggregated to county-year (ug/m3)."),
+        tags$p("Use the AQS year slider to change the year. Monitoring coverage is uneven, so some counties are NA.")
+      ),
+      ozone = tagList(
+        tags$p("Ozone is the annual mean concentration from EPA AQS monitors, aggregated to county-year (ppb)."),
+        tags$p("Use the AQS year slider to change the year. Monitoring coverage is uneven, so some counties are NA.")
+      ),
+      asthma = tagList(
+        tags$p("Asthma is a CDC PLACES modeled estimate (age-adjusted prevalence, %) for a single snapshot year."),
+        tags$p("PLACES is model-based and not intended for county trend inference.")
+      ),
+      copd = tagList(
+        tags$p("COPD is a CDC PLACES modeled estimate (age-adjusted prevalence, %) for a single snapshot year."),
+        tags$p("PLACES is model-based and not intended for county trend inference.")
+      ),
+      svi = tagList(
+        tags$p("SVI is the CDC/ATSDR Social Vulnerability Index overall percentile (0-1). Higher means more vulnerable relative to other counties."),
+        tags$p("SVI percentiles are not directly comparable across years; this app uses SVI ", tags$b(as.character(vintages$svi$year)), ".")
+      ),
+      NULL
+    )
+
+    if (is.null(blurb)) return(NULL)
+
+    tags$details(
+      tags$summary("What does this metric mean?"),
+      tags$div(style = "margin-top: 6px; font-size: 13px; color: #444;", blurb),
+      tags$div(style = "margin-top: 6px; font-size: 12px; color: #666;", "See the Data & Methods tab for sources and limitations.")
+    )
+  })
 
   output$year_ui <- renderUI({
     if (length(missing) > 0) return(NULL)
