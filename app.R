@@ -49,6 +49,10 @@ if (length(missing) == 0) {
   vintages <- NULL
 }
 
+# Sentinel value for "no county selected" in the county_search selectizeInput.
+# We use a non-empty string so it can exist as a real dropdown option.
+COUNTY_NONE_VALUE <- "__NONE__"
+
 metric_choices <- c(
   "CBI (Compound Burden Index)" = "cbi",
   "PM2.5 (annual mean)" = "pm25",
@@ -173,7 +177,7 @@ server <- function(input, output, session) {
     choices_df <- county_master |>
       arrange(label) |>
       transmute(label = label, fips5 = fips5)
-    choices <- stats::setNames(choices_df$fips5, choices_df$label)
+    choices <- c("None (clear selection)" = COUNTY_NONE_VALUE, stats::setNames(choices_df$fips5, choices_df$label))
     # Ensure the county search starts empty (no auto-selected first option).
     updateSelectizeInput(session, "county_search", choices = choices, selected = character(0), server = TRUE)
   }
@@ -191,7 +195,7 @@ server <- function(input, output, session) {
     choices_df <- cm |>
       arrange(label) |>
       transmute(label = label, fips5 = fips5)
-    choices <- stats::setNames(choices_df$fips5, choices_df$label)
+    choices <- c("None (clear selection)" = COUNTY_NONE_VALUE, stats::setNames(choices_df$fips5, choices_df$label))
 
     sel <- input$county_search
     sel_ok <- !is.null(sel) && length(sel) == 1 && nzchar(sel) && sel %in% choices_df$fips5
@@ -207,6 +211,12 @@ server <- function(input, output, session) {
   observeEvent(input$county_search, {
     f <- input$county_search
     if (is.null(f) || length(f) != 1 || !nzchar(f)) return()
+    if (identical(f, COUNTY_NONE_VALUE)) {
+      # Return to the empty/default state.
+      active_fips5(NULL)
+      updateSelectizeInput(session, "county_search", selected = character(0), server = TRUE)
+      return()
+    }
     active_fips5(f)
   }, ignoreInit = TRUE)
 
