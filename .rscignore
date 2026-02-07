@@ -3,3 +3,6 @@ data-raw
 
 # Dev-only files
 tests
+
+# Local artifacts (screenshots, reports, etc.)
+output

@@ -6,7 +6,6 @@ suppressPackageStartupMessages({
   library(leaflet)
   library(sf)
   library(ggplot2)
-  library(DT)
   library(jsonlite)
 })
 
@@ -93,7 +92,11 @@ ui <- bslib::page_navbar(
           leafletOutput("overview_map", height = 420),
           uiOutput("overview_active_county_note")
         ),
-        column(6, DTOutput("overview_top_table"))
+        column(
+          6,
+          textInput("overview_table_search", "Search table (county name)", "", placeholder = "e.g., Los Angeles"),
+          tableOutput("overview_top_table")
+        )
       )
     )
   ),
@@ -143,7 +146,7 @@ ui <- bslib::page_navbar(
       downloadButton("download_analytic_csv", "Download county_analytic.csv"),
       div(class = "spacer"),
       h4("Data Dictionary"),
-      DTOutput("data_dictionary_table")
+      tableOutput("data_dictionary_table")
     )
   )
 )
@@ -353,27 +356,39 @@ server <- function(input, output, session) {
     )
   })
 
-  output$overview_top_table <- renderDT({
+  output$overview_top_table <- renderTable({
     req(length(missing) == 0)
     df <- filtered_analytic() |>
       filter(is.finite(.data$cbi)) |>
       arrange(desc(.data$cbi)) |>
       transmute(
         County = .data$label,
-        `PM2.5 (anchor)` = .data$pm25_mean_ugm3_anchor,
-        `Ozone (anchor)` = .data$ozone_mean_ppb_anchor,
-        `Asthma %` = .data$asthma_prev,
-        `SVI` = .data$svi_overall,
-        `CBI` = .data$cbi
+        `PM2.5 (anchor)` = round(.data$pm25_mean_ugm3_anchor, 2),
+        `Ozone (anchor)` = round(.data$ozone_mean_ppb_anchor, 2),
+        `Asthma %` = round(.data$asthma_prev, 1),
+        `SVI` = round(.data$svi_overall, 2),
+        `CBI` = round(.data$cbi, 2)
       )
 
-    DT::datatable(df, rownames = FALSE, options = list(pageLength = 25, scrollX = TRUE))
-  })
+    q <- input$overview_table_search
+    if (!is.null(q) && nzchar(q)) {
+      ql <- tolower(trimws(q))
+      df <- df |>
+        filter(grepl(ql, tolower(.data$County), fixed = TRUE))
+    }
+
+    # Without DataTables pagination, keep the table reasonably small.
+    head(df, 200)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE)
 
   output$overview_map <- renderLeaflet({
     req(length(missing) == 0)
     leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
-      addProviderTiles("CartoDB.Positron") |>
+      addTiles(
+        urlTemplate = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        options = tileOptions(subdomains = c("a", "b", "c", "d")),
+        attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      ) |>
       # Default view: continental US (avoid an initial world view)
       setView(lng = -98.35, lat = 39.5, zoom = 4)
   })
@@ -573,9 +588,12 @@ server <- function(input, output, session) {
     proxy
   }
 
-  # Initial draw once Leaflet has reported bounds (guarantees the widget exists
-  # on the client, and runs within a reactive context).
-  observeEvent(input$overview_map_bounds, {
+  # Initial draw once the widget has been laid out on the client. We use
+  # `clientData` instead of `onFlushed()` so we stay inside a reactive context,
+  # and avoid relying on `*_bounds` (which may not fire on initial load).
+  observeEvent(session$clientData$output_overview_map_width, {
+    w <- session$clientData$output_overview_map_width
+    req(is.finite(w) && w > 0)
     update_overview_map()
   }, ignoreInit = TRUE, once = TRUE)
 
@@ -631,10 +649,10 @@ server <- function(input, output, session) {
   )
 
   # --- Data & Methods tab ---
-  output$data_dictionary_table <- renderDT({
+  output$data_dictionary_table <- renderTable({
     req(length(missing) == 0)
-    DT::datatable(data_dictionary, rownames = FALSE, options = list(pageLength = 25, scrollX = TRUE))
-  })
+    data_dictionary
+  }, striped = TRUE, hover = TRUE, bordered = TRUE)
 
   output$methods_vintages <- renderUI({
     req(length(missing) == 0)

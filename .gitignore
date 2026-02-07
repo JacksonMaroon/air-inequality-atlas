@@ -9,6 +9,8 @@ data-raw/aqs/
 data-raw/tmp/
 data-raw/cache/
 
+# Dev outputs
+output/
+
 # Shiny
 rsconnect/
-

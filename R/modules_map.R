@@ -92,7 +92,11 @@ mod_atlas_server <- function(id,
 
     render_base_map <- function() {
       leaflet::leaflet(options = leaflet::leafletOptions(preferCanvas = TRUE)) |>
-        leaflet::addProviderTiles("CartoDB.Positron") |>
+        leaflet::addTiles(
+          urlTemplate = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+          options = leaflet::tileOptions(subdomains = c("a", "b", "c", "d")),
+          attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        ) |>
         # Default view: continental US (avoids an initial world view)
         leaflet::setView(lng = -98.35, lat = 39.5, zoom = 4)
     }
@@ -354,9 +358,14 @@ mod_atlas_server <- function(id,
       invisible(NULL)
     }
 
-    # Initial draw once Leaflet has reported bounds (guarantees the widget exists
-    # on the client, and runs within a reactive context).
-    observeEvent(input$map_bounds, {
+    # Initial draw once the widget has been laid out on the client. This avoids
+    # relying on `*_bounds` (which may not fire on initial load) while still
+    # running inside a reactive context.
+    map_output_id <- session$ns("map")
+    map_width_key <- paste0("output_", map_output_id, "_width")
+    observeEvent(session$clientData[[map_width_key]], {
+      w <- session$clientData[[map_width_key]]
+      req(is.finite(w) && w > 0)
       update_map()
     }, ignoreInit = TRUE, once = TRUE)
 
