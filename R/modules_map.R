@@ -59,23 +59,6 @@ mod_atlas_server <- function(id,
       )
     })
 
-    pollution_values_for_year <- function(year_val) {
-      cy <- aqs_county_year()
-      if (nrow(cy) == 0) return(cy[0, ])
-      if (is.null(year_val) || !is.finite(year_val)) year_val <- max(cy$year, na.rm = TRUE)
-      year_val <- as.integer(year_val)
-
-      cy |>
-        dplyr::filter(.data$year == year_val) |>
-        dplyr::select(
-          fips5,
-          pm25_mean_ugm3,
-          ozone_mean_ppb,
-          pm25_monitors_n,
-          ozone_monitors_n
-        )
-    }
-
     # Bivariate palette (x increases left->right, y increases bottom->top)
     bivar_palette <- function() {
       matrix(
@@ -135,7 +118,7 @@ mod_atlas_server <- function(id,
         if (is.null(yk) || yk == "") yk <- "asthma"
 
         year_val <- aqs_year()
-        mv <- pollution_values_for_year(year_val)
+        mv <- aqs_pollution_values_for_year(aqs_county_year(), year_val)
 
         an <- county_analytic() |>
           dplyr::select(fips5, asthma_prev, svi_overall)
@@ -253,7 +236,7 @@ mod_atlas_server <- function(id,
             year_sel <- as.integer(year_sel)
           }
 
-          mv <- pollution_values_for_year(year_sel)
+          mv <- aqs_pollution_values_for_year(cy, year_sel)
 
           joined <- joined |>
             dplyr::left_join(mv, by = "fips5")
@@ -309,24 +292,7 @@ mod_atlas_server <- function(id,
         }
       }
 
-      # Active county outline overlay
-      f <- active_fips5()
-      if (!is.null(f) && nchar(f) == 5) {
-        active_geo <- geo |>
-          dplyr::filter(.data$fips5 == f)
-        if (nrow(active_geo) > 0) {
-          proxy <- proxy |>
-            leaflet::addPolygons(
-              data = active_geo,
-              group = "active",
-              layerId = ~fips5,
-              color = "#000000",
-              weight = 2.5,
-              fillOpacity = 0,
-              fill = FALSE
-            )
-        }
-      }
+      update_active_outline()
 
       # Only reset the viewport when the geo subset changes (e.g., state filter).
       bb <- sf::st_bbox(geo)
@@ -344,18 +310,54 @@ mod_atlas_server <- function(id,
             leaflet::setView(lng = -98.35, lat = 39.5, zoom = 4)
         } else {
           # State view: fit to the filtered geometry bounds.
-          proxy <- proxy |>
-            leaflet::fitBounds(bb$xmin, bb$ymin, bb$xmax, bb$ymax)
+          proxy <- leaflet_fit_bounds_safe(proxy, bb)
         }
       }
 
       proxy
     }
 
-    # Draw polygons once the Leaflet widget is initialized (bounds available).
-    observeEvent(input$map_bounds, {
+    update_active_outline <- function() {
+      f <- active_fips5()
+      proxy <- leaflet::leafletProxy("map", session = session) |>
+        leaflet::clearGroup("active")
+      if (is.null(f) || nchar(f) != 5) return(proxy)
+
+      geo <- geo_sf()
+      active_geo <- geo |>
+        dplyr::filter(.data$fips5 == f)
+      if (nrow(active_geo) == 0) return(proxy)
+
+      proxy |>
+        leaflet::addPolygons(
+          data = active_geo,
+          group = "active",
+          layerId = ~fips5,
+          color = "#000000",
+          weight = 2.5,
+          fillOpacity = 0,
+          fill = FALSE
+        )
+    }
+
+    zoom_to_active <- function() {
+      f <- active_fips5()
+      if (is.null(f) || nchar(f) != 5) return(invisible(NULL))
+
+      geo <- geo_sf()
+      active_geo <- geo |>
+        dplyr::filter(.data$fips5 == f)
+      if (nrow(active_geo) == 0) return(invisible(NULL))
+
+      bb <- sf::st_bbox(active_geo)
+      leaflet_fit_bounds_safe(leaflet::leafletProxy("map", session = session), bb)
+      invisible(NULL)
+    }
+
+    # Initial draw after first flush so the Leaflet widget exists on the client.
+    session$onFlushed(function() {
       update_map()
-    }, ignoreInit = TRUE, once = TRUE)
+    }, once = TRUE)
 
     observeEvent(
       {
@@ -370,6 +372,11 @@ mod_atlas_server <- function(id,
       if (is.null(click$id)) return()
       active_fips5(click$id)
     })
+
+    observeEvent(active_fips5(), {
+      update_active_outline()
+      zoom_to_active()
+    }, ignoreInit = TRUE)
 
     output$active_county_note <- renderUI({
       f <- active_fips5()

@@ -53,6 +53,22 @@ nearest_year <- function(target_year, years_available) {
   max(best)
 }
 
+aqs_pollution_values_for_year <- function(cy, year_val) {
+  if (is.null(cy) || nrow(cy) == 0) return(cy[0, ])
+  if (is.null(year_val) || !is.finite(year_val)) year_val <- max(cy$year, na.rm = TRUE)
+  year_val <- as.integer(year_val)
+
+  cy |>
+    dplyr::filter(.data$year == year_val) |>
+    dplyr::select(
+      fips5,
+      pm25_mean_ugm3,
+      ozone_mean_ppb,
+      pm25_monitors_n,
+      ozone_monitors_n
+    )
+}
+
 state_crosswalk <- function() {
   data <- data.frame(
     state_name = c(as.character(state.name), "District of Columbia"),
@@ -86,4 +102,3 @@ state_crosswalk <- function() {
   data <- merge(data, reg, by = "state_abbr", all.x = TRUE, sort = FALSE)
   data[order(data$state_fips2), c("state_fips2", "state_abbr", "state_name", "region", "division")]
 }
-

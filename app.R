@@ -88,7 +88,11 @@ ui <- bslib::page_navbar(
       uiOutput("overview_valueboxes"),
       div(class = "spacer"),
       fluidRow(
-        column(6, leafletOutput("overview_map", height = 420)),
+        column(
+          6,
+          leafletOutput("overview_map", height = 420),
+          uiOutput("overview_active_county_note")
+        ),
         column(6, DTOutput("overview_top_table"))
       )
     )
@@ -172,6 +176,27 @@ server <- function(input, output, session) {
 
   active_fips5 <- reactiveVal(NULL)
 
+  observeEvent(input$state_filter, {
+    req(length(missing) == 0)
+
+    cm <- county_master
+    if (!is.null(input$state_filter) && input$state_filter != "ALL") {
+      cm <- cm |> dplyr::filter(.data$state_abbr == input$state_filter)
+    }
+
+    choices_df <- cm |>
+      arrange(label) |>
+      transmute(label = label, fips5 = fips5)
+    choices <- stats::setNames(choices_df$fips5, choices_df$label)
+
+    sel <- input$county_search
+    if (!is.null(sel) && sel %in% choices_df$fips5) {
+      updateSelectizeInput(session, "county_search", choices = choices, selected = sel, server = TRUE)
+    } else {
+      updateSelectizeInput(session, "county_search", choices = choices, selected = NULL, server = TRUE)
+    }
+  }, ignoreInit = TRUE)
+
   observeEvent(input$county_search, {
     if (is.null(input$county_search) || input$county_search == "") return()
     active_fips5(input$county_search)
@@ -246,47 +271,17 @@ server <- function(input, output, session) {
         `Asthma %` = .data$asthma_prev,
         `SVI` = .data$svi_overall,
         `CBI` = .data$cbi
-      ) |>
-      head(25)
+      )
 
     DT::datatable(df, rownames = FALSE, options = list(pageLength = 25, scrollX = TRUE))
   })
 
   output$overview_map <- renderLeaflet({
     req(length(missing) == 0)
-    pal <- colorBin(
-      palette = viridisLite::viridis(10),
-      domain = county_analytic$cbi_decile,
-      bins = 10,
-      na.color = "#d9d9d9"
-    )
-
-    geo <- filtered_geo()
-    joined <- geo |>
-      left_join(county_analytic |> select(fips5, cbi_decile), by = "fips5")
-
-    m <- leaflet(joined, options = leafletOptions(preferCanvas = TRUE)) |>
-      addProviderTiles("CartoDB.Positron")
-
-    if (input$state_filter == "ALL") {
-      # Default: continental US (avoid world view).
-      m <- m |> setView(lng = -98.35, lat = 39.5, zoom = 4)
-    } else {
-      bb <- sf::st_bbox(joined)
-      m <- m |> fitBounds(bb$xmin, bb$ymin, bb$xmax, bb$ymax)
-    }
-
-    m |>
-      addPolygons(
-        layerId = ~fips5,
-        color = "#ffffff",
-        weight = 0.3,
-        fillColor = ~pal(cbi_decile),
-        fillOpacity = 0.85,
-        label = ~paste0(label, ": CBI decile ", ifelse(is.na(cbi_decile), "NA", cbi_decile)),
-        highlightOptions = highlightOptions(weight = 2, color = "#000000", bringToFront = TRUE)
-      ) |>
-      addLegend("bottomright", pal = pal, values = ~cbi_decile, title = "CBI decile")
+    leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
+      addProviderTiles("CartoDB.Positron") |>
+      # Default view: continental US (avoid an initial world view)
+      setView(lng = -98.35, lat = 39.5, zoom = 4)
   })
 
   observeEvent(input$overview_map_shape_click, {
@@ -294,6 +289,213 @@ server <- function(input, output, session) {
     if (is.null(click$id)) return()
     active_fips5(click$id)
   })
+
+  output$overview_active_county_note <- renderUI({
+    req(length(missing) == 0)
+    f <- active_fips5()
+    if (is.null(f) || nchar(f) != 5) return(NULL)
+    row <- county_master |>
+      filter(.data$fips5 == f) |>
+      head(1)
+    if (nrow(row) == 0) return(NULL)
+    tags$p(tags$b("Active county:"), row$label[[1]])
+  })
+
+  update_overview_active_outline <- function() {
+    f <- active_fips5()
+    proxy <- leaflet::leafletProxy("overview_map", session = session) |>
+      leaflet::clearGroup("active")
+    if (is.null(f) || nchar(f) != 5) return(proxy)
+
+    geo <- filtered_geo()
+    active_geo <- geo |>
+      dplyr::filter(.data$fips5 == f)
+    if (nrow(active_geo) == 0) return(proxy)
+
+    proxy |>
+      leaflet::addPolygons(
+        data = active_geo,
+        group = "active",
+        layerId = ~fips5,
+        color = "#000000",
+        weight = 2.5,
+        fillOpacity = 0,
+        fill = FALSE
+      )
+  }
+
+  zoom_overview_to_active <- function() {
+    f <- active_fips5()
+    if (is.null(f) || nchar(f) != 5) return(invisible(NULL))
+
+    geo <- filtered_geo()
+    active_geo <- geo |>
+      dplyr::filter(.data$fips5 == f)
+    if (nrow(active_geo) == 0) return(invisible(NULL))
+
+    bb <- sf::st_bbox(active_geo)
+    leaflet_fit_bounds_safe(leaflet::leafletProxy("overview_map", session = session), bb)
+    invisible(NULL)
+  }
+
+  update_overview_map <- function() {
+    geo <- filtered_geo()
+    req(nrow(geo) > 0)
+
+    proxy <- leaflet::leafletProxy("overview_map", session = session) |>
+      leaflet::clearControls() |>
+      leaflet::clearShapes()
+
+    mk <- input$metric
+    if (is.null(mk) || mk == "") mk <- "cbi"
+
+    joined <- geo
+    legend_pal <- NULL
+    legend_vals <- NULL
+    legend_title <- NULL
+
+    an <- filtered_analytic()
+
+    if (mk == "cbi") {
+      joined <- joined |>
+        dplyr::left_join(an |>
+          dplyr::select(fips5, cbi_decile),
+        by = "fips5")
+
+      values <- joined$cbi_decile
+      pal <- leaflet::colorBin(
+        palette = viridisLite::viridis(10),
+        domain = values,
+        bins = 10,
+        na.color = "#d9d9d9"
+      )
+      joined$fill <- pal(values)
+      joined$tooltip <- paste0(joined$label, ": CBI decile ", ifelse(is.na(values), "NA", values))
+      legend_pal <- pal
+      legend_vals <- values
+      legend_title <- "CBI decile"
+    } else if (mk == "asthma") {
+      joined <- joined |>
+        dplyr::left_join(an |>
+          dplyr::select(fips5, asthma_prev),
+        by = "fips5")
+
+      values <- joined$asthma_prev
+      pal <- leaflet::colorBin(viridisLite::viridis(7), domain = values, bins = 7, na.color = "#d9d9d9")
+      joined$fill <- pal(values)
+      joined$tooltip <- paste0(joined$label, ": Asthma ", ifelse(is.na(values), "NA", sprintf("%.1f%%", values)))
+      legend_pal <- pal
+      legend_vals <- values
+      legend_title <- "Asthma (%)"
+    } else if (mk == "copd") {
+      joined <- joined |>
+        dplyr::left_join(an |>
+          dplyr::select(fips5, copd_prev),
+        by = "fips5")
+
+      values <- joined$copd_prev
+      pal <- leaflet::colorBin(viridisLite::viridis(7), domain = values, bins = 7, na.color = "#d9d9d9")
+      joined$fill <- pal(values)
+      joined$tooltip <- paste0(joined$label, ": COPD ", ifelse(is.na(values), "NA", sprintf("%.1f%%", values)))
+      legend_pal <- pal
+      legend_vals <- values
+      legend_title <- "COPD (%)"
+    } else if (mk == "svi") {
+      joined <- joined |>
+        dplyr::left_join(an |>
+          dplyr::select(fips5, svi_overall),
+        by = "fips5")
+
+      values <- joined$svi_overall
+      pal <- leaflet::colorBin(viridisLite::viridis(7), domain = values, bins = 7, na.color = "#d9d9d9")
+      joined$fill <- pal(values)
+      joined$tooltip <- paste0(joined$label, ": SVI ", ifelse(is.na(values), "NA", sprintf("%.2f", values)))
+      legend_pal <- pal
+      legend_vals <- values
+      legend_title <- "SVI (0-1)"
+    } else if (mk %in% c("pm25", "ozone")) {
+      year_sel <- input$aqs_year
+      mv <- aqs_pollution_values_for_year(aqs_county_year, year_sel)
+
+      joined <- joined |>
+        dplyr::left_join(mv, by = "fips5")
+
+      if (mk == "pm25") {
+        values <- joined$pm25_mean_ugm3
+        pal <- leaflet::colorBin(viridisLite::viridis(7), domain = values, bins = 7, na.color = "#d9d9d9")
+        joined$fill <- pal(values)
+        joined$tooltip <- paste0(
+          joined$label, ": PM2.5 ",
+          ifelse(is.na(values), "NA", sprintf("%.2f", values)),
+          if (!is.null(year_sel) && is.finite(year_sel)) paste0(" (", as.integer(year_sel), ")") else ""
+        )
+        legend_pal <- pal
+        legend_vals <- values
+        legend_title <- if (!is.null(year_sel) && is.finite(year_sel)) paste0("PM2.5 (", as.integer(year_sel), ")") else "PM2.5"
+      } else {
+        values <- joined$ozone_mean_ppb
+        pal <- leaflet::colorBin(viridisLite::viridis(7), domain = values, bins = 7, na.color = "#d9d9d9")
+        joined$fill <- pal(values)
+        joined$tooltip <- paste0(
+          joined$label, ": Ozone ",
+          ifelse(is.na(values), "NA", sprintf("%.2f", values)),
+          " ppb",
+          if (!is.null(year_sel) && is.finite(year_sel)) paste0(" (", as.integer(year_sel), ")") else ""
+        )
+        legend_pal <- pal
+        legend_vals <- values
+        legend_title <- if (!is.null(year_sel) && is.finite(year_sel)) paste0("Ozone ppb (", as.integer(year_sel), ")") else "Ozone (ppb)"
+      }
+    } else {
+      joined$fill <- "#d9d9d9"
+      joined$tooltip <- joined$label
+    }
+
+    labels <- lapply(joined$tooltip, htmltools::HTML)
+    proxy <- proxy |>
+      leaflet::addPolygons(
+        data = joined,
+        layerId = ~fips5,
+        color = "#ffffff",
+        weight = 0.25,
+        fillColor = ~fill,
+        fillOpacity = 0.85,
+        label = labels,
+        highlightOptions = leaflet::highlightOptions(weight = 2, color = "#000000", bringToFront = TRUE)
+      )
+
+    if (!is.null(legend_pal)) {
+      proxy <- proxy |>
+        leaflet::addLegend("bottomright", pal = legend_pal, values = legend_vals, title = legend_title)
+    }
+
+    if (input$state_filter == "ALL") {
+      proxy <- proxy |> leaflet::setView(lng = -98.35, lat = 39.5, zoom = 4)
+    } else {
+      proxy <- leaflet_fit_bounds_safe(proxy, sf::st_bbox(geo))
+    }
+
+    update_overview_active_outline()
+    proxy
+  }
+
+  # Initial draw after first flush so the Leaflet widget exists on the client.
+  session$onFlushed(function() {
+    update_overview_map()
+  }, once = TRUE)
+
+  observeEvent(
+    {
+      list(input$metric, input$aqs_year, input$state_filter)
+    },
+    update_overview_map,
+    ignoreInit = TRUE
+  )
+
+  observeEvent(active_fips5(), {
+    update_overview_active_outline()
+    zoom_overview_to_active()
+  }, ignoreInit = TRUE)
 
   # --- Modules ---
   mod_atlas_server(

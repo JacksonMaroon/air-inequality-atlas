@@ -50,3 +50,42 @@ write_parquet <- function(x, path) {
   arrow::write_parquet(x, path)
   invisible(path)
 }
+
+# Normalize an sf::st_bbox() style bbox to fitBounds args.
+# Returns c(lng1, lat1, lng2, lat2) or NULL if inputs are unusable.
+bbox_to_lnglat <- function(bb) {
+  if (is.null(bb)) return(NULL)
+  needed <- c("xmin", "ymin", "xmax", "ymax")
+  if (!all(needed %in% names(bb))) return(NULL)
+
+  vals <- suppressWarnings(as.numeric(bb[needed]))
+  if (length(vals) != 4 || any(!is.finite(vals))) return(NULL)
+
+  # Default: assume bbox is x=lng, y=lat.
+  a <- c(lng1 = vals[[1]], lat1 = vals[[2]], lng2 = vals[[3]], lat2 = vals[[4]])
+  # Alternate: some environments can surface axis-order confusion for EPSG:4326.
+  b <- c(lng1 = vals[[2]], lat1 = vals[[1]], lng2 = vals[[4]], lat2 = vals[[3]])
+
+  is_valid <- function(v) {
+    all(is.finite(v)) &&
+      all(v[c("lat1", "lat2")] >= -90 & v[c("lat1", "lat2")] <= 90) &&
+      all(v[c("lng1", "lng2")] >= -180 & v[c("lng1", "lng2")] <= 180)
+  }
+
+  if (is_valid(a)) return(a)
+  if (is_valid(b)) return(b)
+  NULL
+}
+
+leaflet_fit_bounds_safe <- function(map,
+                                    bb,
+                                    fallback_lng = -98.35,
+                                    fallback_lat = 39.5,
+                                    fallback_zoom = 4) {
+  args <- bbox_to_lnglat(bb)
+  if (is.null(args)) {
+    return(leaflet::setView(map, lng = fallback_lng, lat = fallback_lat, zoom = fallback_zoom))
+  }
+
+  leaflet::fitBounds(map, args[["lng1"]], args[["lat1"]], args[["lng2"]], args[["lat2"]])
+}
