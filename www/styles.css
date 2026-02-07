@@ -16,3 +16,14 @@
   margin-bottom: 10px;
 }
 
+/* Hide the global page sidebar on selected tabs (Model Lab, etc.) and
+   allow the main content to expand to full width. */
+body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout {
+  --_sidebar-width: 0px !important;
+  grid-template-columns: 1fr !important;
+}
+
+body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout > aside.sidebar,
+body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout > button.collapse-toggle {
+  display: none !important;
+}

@@ -66,7 +66,35 @@ ui <- bslib::page_navbar(
   title = "Air Inequality Atlas",
   header = tagList(
     tags$head(
-      tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
+      tags$link(rel = "stylesheet", type = "text/css", href = "styles.css"),
+      # Hide the global sidebar on tabs that don't use these controls.
+      tags$script(
+        shiny::HTML(
+          paste(
+            c(
+              "(function() {",
+              "  function activeTabName() {",
+              "    var a = document.querySelector('ul.navbar-nav a.nav-link.active');",
+              "    return a ? a.getAttribute('data-value') : null;",
+              "  }",
+              "  function updateSidebarVisibility() {",
+              "    var tab = activeTabName();",
+              "    var hide = tab === 'Inequality & Overlap' || tab === 'Model Lab' || tab === 'Data & Methods';",
+              "    if (document.body) document.body.classList.toggle('hide-global-sidebar', hide);",
+              "  }",
+              "  document.addEventListener('DOMContentLoaded', function() {",
+              "    updateSidebarVisibility();",
+              "    document.addEventListener('shown.bs.tab', updateSidebarVisibility);",
+              "    // Fallback: bslib sometimes activates tabs after DOMContentLoaded.",
+              "    setTimeout(updateSidebarVisibility, 250);",
+              "    setTimeout(updateSidebarVisibility, 1500);",
+              "  });",
+              "})();"
+            ),
+            collapse = "\n"
+          )
+        )
+      )
     )
   ),
   sidebar = bslib::sidebar(
