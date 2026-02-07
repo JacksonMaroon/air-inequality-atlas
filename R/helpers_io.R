@@ -72,9 +72,21 @@ bbox_to_lnglat <- function(bb) {
       all(v[c("lng1", "lng2")] >= -180 & v[c("lng1", "lng2")] <= 180)
   }
 
-  if (is_valid(a)) return(a)
-  if (is_valid(b)) return(b)
-  NULL
+  a_valid <- is_valid(a)
+  b_valid <- is_valid(b)
+
+  if (!a_valid && !b_valid) return(NULL)
+  if (a_valid && !b_valid) return(a)
+  if (b_valid && !a_valid) return(b)
+
+  # If both are valid, prefer positive latitudes for this US-only app.
+  a_us <- all(a[c("lat1", "lat2")] >= 0)
+  b_us <- all(b[c("lat1", "lat2")] >= 0)
+  if (a_us && !b_us) return(a)
+  if (b_us && !a_us) return(b)
+
+  # Otherwise, default to the standard interpretation.
+  a
 }
 
 leaflet_fit_bounds_safe <- function(map,

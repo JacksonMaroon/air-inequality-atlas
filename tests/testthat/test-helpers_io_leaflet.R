@@ -30,3 +30,10 @@ test_that("bbox_to_lnglat fixes swapped axis-order bboxes", {
   expect_equal(unname(out), c(-124.4, 32.5, -114.1, 42.0))
 })
 
+test_that("bbox_to_lnglat prefers positive latitudes when both variants are valid", {
+  # Example: eastern US bbox could still be 'valid' when swapped, but should
+  # prefer positive-latitude interpretation for this app.
+  bb_swapped <- c(xmin = 40.0, ymin = -79.0, xmax = 45.0, ymax = -71.0)
+  out <- bbox_to_lnglat(bb_swapped)
+  expect_equal(unname(out), c(-79.0, 40.0, -71.0, 45.0))
+})
