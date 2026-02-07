@@ -354,10 +354,11 @@ mod_atlas_server <- function(id,
       invisible(NULL)
     }
 
-    # Initial draw after first flush so the Leaflet widget exists on the client.
-    session$onFlushed(function() {
+    # Initial draw once Leaflet has reported bounds (guarantees the widget exists
+    # on the client, and runs within a reactive context).
+    observeEvent(input$map_bounds, {
       update_map()
-    }, once = TRUE)
+    }, ignoreInit = TRUE, once = TRUE)
 
     observeEvent(
       {
