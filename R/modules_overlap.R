@@ -38,7 +38,7 @@ mod_overlap_ui <- function(id) {
     div(class = "spacer"),
     fluidRow(
       column(6, leafletOutput(ns("overlap_map"), height = 420)),
-      column(6, DTOutput(ns("overlap_table")))
+      column(6, tableOutput(ns("overlap_table")))
     )
   )
 }
@@ -161,18 +161,28 @@ mod_overlap_server <- function(id,
         head(200)
     })
 
-    output$overlap_table <- renderDT({
+    output$overlap_table <- renderTable({
       df <- overlap_hotspots()
-      if (nrow(df) == 0) return(DT::datatable(data.frame()))
-      DT::datatable(df, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
-    })
+      if (nrow(df) == 0) return(data.frame())
+      df |>
+        mutate(
+          v = round(.data$v, 3),
+          e = round(.data$e, 3),
+          asthma_prev = round(.data$asthma_prev, 1),
+          copd_prev = round(.data$copd_prev, 1)
+        )
+    }, striped = TRUE, hover = TRUE, bordered = TRUE)
 
     output$overlap_map <- renderLeaflet({
       geo <- geo_sf()
       req(nrow(geo) > 0)
 
       leaflet(geo, options = leafletOptions(preferCanvas = TRUE)) |>
-        addProviderTiles("CartoDB.Positron") |>
+        addTiles(
+          urlTemplate = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+          options = tileOptions(subdomains = c("a", "b", "c", "d")),
+          attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        ) |>
         # Default: continental US (avoid world view).
         setView(lng = -98.35, lat = 39.5, zoom = 4) |>
         addPolygons(
