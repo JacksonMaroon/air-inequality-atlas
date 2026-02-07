@@ -7,7 +7,6 @@ suppressPackageStartupMessages({
   library(sf)
   library(ggplot2)
   library(jsonlite)
-  library(DT)
 })
 
 source("R/helpers_io.R")
