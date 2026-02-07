@@ -234,25 +234,119 @@ server <- function(input, output, session) {
   output$overview_valueboxes <- renderUI({
     req(length(missing) == 0)
     df <- filtered_analytic()
+
+    mk <- input$metric
+    if (is.null(mk) || mk == "") mk <- "cbi"
+
+    # Active county (if any)
+    f <- active_fips5()
+    active_label <- NA_character_
+    if (!is.null(f) && nchar(f) == 5) {
+      row <- county_master |>
+        filter(.data$fips5 == f) |>
+        head(1)
+      if (nrow(row) > 0) active_label <- row$label[[1]]
+    }
+
+    # Metric-specific summary values.
+    metric_name <- switch(
+      mk,
+      cbi = "CBI",
+      pm25 = "PM2.5",
+      ozone = "Ozone",
+      asthma = "Asthma",
+      copd = "COPD",
+      svi = "SVI",
+      mk
+    )
+
+    metric_units <- switch(
+      mk,
+      pm25 = "ug/m3",
+      ozone = "ppb",
+      asthma = "%",
+      copd = "%",
+      svi = "(0-1)",
+      cbi = "",
+      ""
+    )
+
+    values <- rep(NA_real_, nrow(df))
+    year_sel <- input$aqs_year
+
+    if (mk %in% c("pm25", "ozone")) {
+      mv <- aqs_pollution_values_for_year(aqs_county_year, year_sel)
+      joined <- df |>
+        select(fips5) |>
+        left_join(mv, by = "fips5")
+      values <- if (mk == "pm25") joined$pm25_mean_ugm3 else joined$ozone_mean_ppb
+    } else if (mk == "cbi") {
+      values <- df$cbi
+    } else if (mk == "asthma") {
+      values <- df$asthma_prev
+    } else if (mk == "copd") {
+      values <- df$copd_prev
+    } else if (mk == "svi") {
+      values <- df$svi_overall
+    }
+
+    coverage_n <- sum(is.finite(values))
+    mean_val <- if (coverage_n > 0) mean(values, na.rm = TRUE) else NA_real_
+
+    active_val <- NA_real_
+    if (!is.null(f) && nchar(f) == 5) {
+      if (mk %in% c("pm25", "ozone")) {
+        mv <- aqs_pollution_values_for_year(aqs_county_year, year_sel)
+        row <- mv |>
+          filter(.data$fips5 == f) |>
+          head(1)
+        if (nrow(row) > 0) {
+          active_val <- if (mk == "pm25") row$pm25_mean_ugm3[[1]] else row$ozone_mean_ppb[[1]]
+        }
+      } else {
+        row <- county_analytic |>
+          filter(.data$fips5 == f) |>
+          head(1)
+        if (nrow(row) > 0) {
+          active_val <- switch(
+            mk,
+            cbi = row$cbi[[1]],
+            asthma = row$asthma_prev[[1]],
+            copd = row$copd_prev[[1]],
+            svi = row$svi_overall[[1]],
+            NA_real_
+          )
+        }
+      }
+    }
+
     bslib::layout_columns(
       bslib::value_box(
-        title = "PM2.5 Coverage (Anchor)",
-        value = sum(df$has_pm25_anchor %in% TRUE, na.rm = TRUE),
+        title = "Counties Shown",
+        value = nrow(df),
         showcase = NULL
       ),
       bslib::value_box(
-        title = "Ozone Coverage (Anchor)",
-        value = sum(df$has_ozone_anchor %in% TRUE, na.rm = TRUE),
+        title = paste0(metric_name, " Coverage"),
+        value = coverage_n,
         showcase = NULL
       ),
       bslib::value_box(
-        title = "Mean Asthma (PLACES)",
-        value = sprintf("%.1f%%", mean(df$asthma_prev, na.rm = TRUE)),
+        title = paste0("Mean ", metric_name),
+        value = if (is.finite(mean_val)) {
+          if (metric_units == "%") sprintf("%.1f%%", mean_val) else if (metric_units == "(0-1)") sprintf("%.2f", mean_val) else if (metric_units == "") sprintf("%.2f", mean_val) else sprintf("%.2f %s", mean_val, metric_units)
+        } else {
+          "NA"
+        },
         showcase = NULL
       ),
       bslib::value_box(
-        title = "Counties in Top CBI Decile",
-        value = sum(df$cbi_decile == 10, na.rm = TRUE),
+        title = if (!is.na(active_label)) paste0("Active: ", active_label) else "Active County",
+        value = if (is.finite(active_val)) {
+          if (metric_units == "%") sprintf("%.1f%%", active_val) else if (metric_units == "(0-1)") sprintf("%.2f", active_val) else if (metric_units == "") sprintf("%.2f", active_val) else sprintf("%.2f %s", active_val, metric_units)
+        } else {
+          "None"
+        },
         showcase = NULL
       ),
       col_widths = c(3, 3, 3, 3)
