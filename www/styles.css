@@ -36,6 +36,36 @@ body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout.sidebar-collapse
   padding-right: var(--_padding) !important;
 }
 
+/* Top loading bar (only on selected tabs). We toggle:
+   - `body.show-busy-bar` based on active tab
+   - `body.shiny-is-busy` based on Shiny busy/idle events (see app.R header JS) */
+body.show-busy-bar.shiny-is-busy::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 35vw;
+  background: linear-gradient(90deg, rgba(0, 123, 194, 0), rgba(0, 123, 194, 0.8), rgba(0, 123, 194, 0));
+  animation: atlas-busybar 0.95s ease-in-out infinite;
+  z-index: 2000;
+  pointer-events: none;
+}
+
+@keyframes atlas-busybar {
+  0% {
+    transform: translateX(-45vw);
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(110vw);
+    opacity: 0.35;
+  }
+}
+
 /* Leaflet maps: show a lightweight "Loading map..." overlay while Shiny is
    recalculating the output so users don't stare at a blank white box. */
 .leaflet.html-widget-output {
