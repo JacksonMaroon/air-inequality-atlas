@@ -7,6 +7,7 @@ suppressPackageStartupMessages({
   library(sf)
   library(ggplot2)
   library(jsonlite)
+  library(DT)
 })
 
 source("R/helpers_io.R")
@@ -174,7 +175,8 @@ server <- function(input, output, session) {
       arrange(label) |>
       transmute(label = label, fips5 = fips5)
     choices <- stats::setNames(choices_df$fips5, choices_df$label)
-    updateSelectizeInput(session, "county_search", choices = choices, server = TRUE)
+    # Ensure the county search starts empty (no auto-selected first option).
+    updateSelectizeInput(session, "county_search", choices = choices, selected = character(0), server = TRUE)
   }
 
   active_fips5 <- reactiveVal(NULL)
@@ -193,16 +195,20 @@ server <- function(input, output, session) {
     choices <- stats::setNames(choices_df$fips5, choices_df$label)
 
     sel <- input$county_search
-    if (!is.null(sel) && sel %in% choices_df$fips5) {
+    sel_ok <- !is.null(sel) && length(sel) == 1 && nzchar(sel) && sel %in% choices_df$fips5
+    if (sel_ok) {
       updateSelectizeInput(session, "county_search", choices = choices, selected = sel, server = TRUE)
     } else {
-      updateSelectizeInput(session, "county_search", choices = choices, selected = NULL, server = TRUE)
+      # Clear selection when the current selection is invalid for the state filter.
+      # Use character(0) (NULL would be ignored by updateSelectizeInput()).
+      updateSelectizeInput(session, "county_search", choices = choices, selected = character(0), server = TRUE)
     }
   }, ignoreInit = TRUE)
 
   observeEvent(input$county_search, {
-    if (is.null(input$county_search) || input$county_search == "") return()
-    active_fips5(input$county_search)
+    f <- input$county_search
+    if (is.null(f) || length(f) != 1 || !nzchar(f)) return()
+    active_fips5(f)
   }, ignoreInit = TRUE)
 
   output$year_ui <- renderUI({
