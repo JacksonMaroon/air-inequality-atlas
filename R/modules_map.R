@@ -27,8 +27,6 @@ mod_atlas_server <- function(id,
                             aqs_year,
                             active_fips5) {
   moduleServer(id, function(input, output, session) {
-    last_view_key <- reactiveVal(NULL)
-
     metric_label <- function(key) {
       switch(
         key,
@@ -104,16 +102,7 @@ mod_atlas_server <- function(id,
     output$map <- renderLeaflet({
       geo <- geo_sf()
       req(nrow(geo) > 0)
-      render_base_map()
-    })
-
-    update_map <- function() {
-      geo <- geo_sf()
-      req(nrow(geo) > 0)
-
-      proxy <- leaflet::leafletProxy("map", session = session) |>
-        leaflet::clearControls() |>
-        leaflet::clearShapes()
+      m <- render_base_map()
 
       if (isTRUE(input$bivar_mode)) {
         xk <- input$bivar_x
@@ -156,7 +145,7 @@ mod_atlas_server <- function(id,
 
         joined$fill <- ifelse(is.na(cls), "#d9d9d9", unname(col_map[as.character(cls)]))
 
-        proxy <- proxy |>
+        m <- m |>
           leaflet::addPolygons(
             data = joined,
             layerId = ~fips5,
@@ -278,7 +267,7 @@ mod_atlas_server <- function(id,
 
         labels <- lapply(joined$tooltip, htmltools::HTML)
 
-        proxy <- proxy |>
+        m <- m |>
           leaflet::addPolygons(
             data = joined,
             layerId = ~fips5,
@@ -291,35 +280,44 @@ mod_atlas_server <- function(id,
           )
 
         if (!is.null(legend_pal)) {
-          proxy <- proxy |>
+          m <- m |>
             leaflet::addLegend("bottomright", pal = legend_pal, values = legend_vals, title = legend_title)
         }
       }
 
-      update_active_outline()
-
-      # Only reset the viewport when the geo subset changes (e.g., state filter).
-      bb <- sf::st_bbox(geo)
-      key <- paste0(
-        formatC(bb$xmin, format = "f", digits = 6), ",",
-        formatC(bb$ymin, format = "f", digits = 6), ",",
-        formatC(bb$xmax, format = "f", digits = 6), ",",
-        formatC(bb$ymax, format = "f", digits = 6), "|n=", nrow(geo)
-      )
-      if (is.null(last_view_key()) || !identical(last_view_key(), key)) {
-        last_view_key(key)
-        if (nrow(geo) > 1000) {
-          # National view: show continental US by default (AK/HI can be panned to).
-          proxy <- proxy |>
-            leaflet::setView(lng = -98.35, lat = 39.5, zoom = 4)
-        } else {
-          # State view: fit to the filtered geometry bounds.
-          proxy <- leaflet_fit_bounds_safe(proxy, bb)
+      # Redraw the active outline after any full re-render without forcing this
+      # output to depend on active_fips5().
+      f <- shiny::isolate(active_fips5())
+      if (!is.null(f) && nchar(f) == 5) {
+        active_geo <- geo |>
+          dplyr::filter(.data$fips5 == f)
+        if (nrow(active_geo) > 0) {
+          m <- m |>
+            leaflet::addPolygons(
+              data = active_geo,
+              group = "active",
+              layerId = ~fips5,
+              color = "#000000",
+              weight = 2.5,
+              fillOpacity = 0,
+              fill = FALSE
+            )
         }
       }
 
-      proxy
-    }
+      # View: national vs state subset.
+      bb <- sf::st_bbox(geo)
+      if (nrow(geo) > 1000) {
+        # National view: show continental US by default (AK/HI can be panned to).
+        m <- m |>
+          leaflet::setView(lng = -98.35, lat = 39.5, zoom = 4)
+      } else {
+        # State view: fit to the filtered geometry bounds.
+        m <- leaflet_fit_bounds_safe(m, bb)
+      }
+
+      m
+    })
 
     update_active_outline <- function() {
       f <- active_fips5()
@@ -357,25 +355,6 @@ mod_atlas_server <- function(id,
       leaflet_fit_bounds_safe(leaflet::leafletProxy("map", session = session), bb)
       invisible(NULL)
     }
-
-    map_output_id <- session$ns("map")
-    map_width_key <- paste0("output_", map_output_id, "_width")
-    observeEvent(
-      {
-        list(
-          metric(), aqs_year(), geo_sf(), county_analytic(),
-          input$bivar_mode, input$bivar_x, input$bivar_y,
-          session$clientData[[map_width_key]]
-        )
-      },
-      {
-        # Ensure the widget exists on the client before proxy updates.
-        w <- session$clientData[[map_width_key]]
-        req(is.finite(w) && w > 0)
-        update_map()
-      },
-      ignoreInit = FALSE
-    )
 
     observeEvent(input$map_shape_click, {
       click <- input$map_shape_click

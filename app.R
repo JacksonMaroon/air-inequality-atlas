@@ -388,77 +388,8 @@ server <- function(input, output, session) {
 
   output$overview_map <- renderLeaflet({
     req(length(missing) == 0)
-    leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
-      addTiles(
-        urlTemplate = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-        options = tileOptions(subdomains = c("a", "b", "c", "d")),
-        attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-      ) |>
-      # Default view: continental US (avoid an initial world view)
-      setView(lng = -98.35, lat = 39.5, zoom = 4)
-  })
-
-  observeEvent(input$overview_map_shape_click, {
-    click <- input$overview_map_shape_click
-    if (is.null(click$id)) return()
-    active_fips5(click$id)
-  })
-
-  output$overview_active_county_note <- renderUI({
-    req(length(missing) == 0)
-    f <- active_fips5()
-    if (is.null(f) || nchar(f) != 5) return(NULL)
-    row <- county_master |>
-      filter(.data$fips5 == f) |>
-      head(1)
-    if (nrow(row) == 0) return(NULL)
-    tags$p(tags$b("Active county:"), row$label[[1]])
-  })
-
-  update_overview_active_outline <- function() {
-    f <- active_fips5()
-    proxy <- leaflet::leafletProxy("overview_map", session = session) |>
-      leaflet::clearGroup("active")
-    if (is.null(f) || nchar(f) != 5) return(proxy)
-
-    geo <- filtered_geo()
-    active_geo <- geo |>
-      dplyr::filter(.data$fips5 == f)
-    if (nrow(active_geo) == 0) return(proxy)
-
-    proxy |>
-      leaflet::addPolygons(
-        data = active_geo,
-        group = "active",
-        layerId = ~fips5,
-        color = "#000000",
-        weight = 2.5,
-        fillOpacity = 0,
-        fill = FALSE
-      )
-  }
-
-  zoom_overview_to_active <- function() {
-    f <- active_fips5()
-    if (is.null(f) || nchar(f) != 5) return(invisible(NULL))
-
-    geo <- filtered_geo()
-    active_geo <- geo |>
-      dplyr::filter(.data$fips5 == f)
-    if (nrow(active_geo) == 0) return(invisible(NULL))
-
-    bb <- sf::st_bbox(active_geo)
-    leaflet_fit_bounds_safe(leaflet::leafletProxy("overview_map", session = session), bb)
-    invisible(NULL)
-  }
-
-  update_overview_map <- function() {
     geo <- filtered_geo()
     req(nrow(geo) > 0)
-
-    proxy <- leaflet::leafletProxy("overview_map", session = session) |>
-      leaflet::clearControls() |>
-      leaflet::clearShapes()
 
     mk <- input$metric
     if (is.null(mk) || mk == "") mk <- "cbi"
@@ -566,7 +497,13 @@ server <- function(input, output, session) {
     }
 
     labels <- lapply(joined$tooltip, htmltools::HTML)
-    proxy <- proxy |>
+
+    m <- leaflet::leaflet(options = leaflet::leafletOptions(preferCanvas = TRUE)) |>
+      leaflet::addTiles(
+        urlTemplate = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        options = leaflet::tileOptions(subdomains = c("a", "b", "c", "d")),
+        attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      ) |>
       leaflet::addPolygons(
         data = joined,
         layerId = ~fips5,
@@ -579,31 +516,92 @@ server <- function(input, output, session) {
       )
 
     if (!is.null(legend_pal)) {
-      proxy <- proxy |>
+      m <- m |>
         leaflet::addLegend("bottomright", pal = legend_pal, values = legend_vals, title = legend_title)
     }
 
-    if (input$state_filter == "ALL") {
-      proxy <- proxy |> leaflet::setView(lng = -98.35, lat = 39.5, zoom = 4)
-    } else {
-      proxy <- leaflet_fit_bounds_safe(proxy, sf::st_bbox(geo))
+    # Redraw the active outline after any full re-render without forcing this
+    # output to depend on active_fips5().
+    f <- isolate(active_fips5())
+    if (!is.null(f) && nchar(f) == 5) {
+      active_geo <- geo |>
+        dplyr::filter(.data$fips5 == f)
+      if (nrow(active_geo) > 0) {
+        m <- m |>
+          leaflet::addPolygons(
+            data = active_geo,
+            group = "active",
+            layerId = ~fips5,
+            color = "#000000",
+            weight = 2.5,
+            fillOpacity = 0,
+            fill = FALSE
+          )
+      }
     }
 
-    update_overview_active_outline()
-    proxy
+    if (input$state_filter == "ALL") {
+      m <- m |> leaflet::setView(lng = -98.35, lat = 39.5, zoom = 4)
+    } else {
+      m <- leaflet_fit_bounds_safe(m, sf::st_bbox(geo))
+    }
+
+    m
+  })
+
+  observeEvent(input$overview_map_shape_click, {
+    click <- input$overview_map_shape_click
+    if (is.null(click$id)) return()
+    active_fips5(click$id)
+  })
+
+  output$overview_active_county_note <- renderUI({
+    req(length(missing) == 0)
+    f <- active_fips5()
+    if (is.null(f) || nchar(f) != 5) return(NULL)
+    row <- county_master |>
+      filter(.data$fips5 == f) |>
+      head(1)
+    if (nrow(row) == 0) return(NULL)
+    tags$p(tags$b("Active county:"), row$label[[1]])
+  })
+
+  update_overview_active_outline <- function() {
+    f <- active_fips5()
+    proxy <- leaflet::leafletProxy("overview_map", session = session) |>
+      leaflet::clearGroup("active")
+    if (is.null(f) || nchar(f) != 5) return(proxy)
+
+    geo <- filtered_geo()
+    active_geo <- geo |>
+      dplyr::filter(.data$fips5 == f)
+    if (nrow(active_geo) == 0) return(proxy)
+
+    proxy |>
+      leaflet::addPolygons(
+        data = active_geo,
+        group = "active",
+        layerId = ~fips5,
+        color = "#000000",
+        weight = 2.5,
+        fillOpacity = 0,
+        fill = FALSE
+      )
   }
 
-  observeEvent(
-    {
-      list(input$metric, input$aqs_year, input$state_filter, session$clientData$output_overview_map_width)
-    },
-    {
-      w <- session$clientData$output_overview_map_width
-      req(is.finite(w) && w > 0)
-      update_overview_map()
-    },
-    ignoreInit = FALSE
-  )
+  zoom_overview_to_active <- function() {
+    f <- active_fips5()
+    if (is.null(f) || nchar(f) != 5) return(invisible(NULL))
+
+    geo <- filtered_geo()
+    active_geo <- geo |>
+      dplyr::filter(.data$fips5 == f)
+    if (nrow(active_geo) == 0) return(invisible(NULL))
+
+    bb <- sf::st_bbox(active_geo)
+    leaflet_fit_bounds_safe(leaflet::leafletProxy("overview_map", session = session), bb)
+    invisible(NULL)
+  }
 
   observeEvent(active_fips5(), {
     update_overview_active_outline()
