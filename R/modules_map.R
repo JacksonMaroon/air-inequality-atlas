@@ -358,23 +358,23 @@ mod_atlas_server <- function(id,
       invisible(NULL)
     }
 
-    # Initial draw once the widget has been laid out on the client. This avoids
-    # relying on `*_bounds` (which may not fire on initial load) while still
-    # running inside a reactive context.
     map_output_id <- session$ns("map")
     map_width_key <- paste0("output_", map_output_id, "_width")
-    observeEvent(session$clientData[[map_width_key]], {
-      w <- session$clientData[[map_width_key]]
-      req(is.finite(w) && w > 0)
-      update_map()
-    }, ignoreInit = TRUE, once = TRUE)
-
     observeEvent(
       {
-        list(metric(), aqs_year(), geo_sf(), county_analytic(), input$bivar_mode, input$bivar_x, input$bivar_y)
+        list(
+          metric(), aqs_year(), geo_sf(), county_analytic(),
+          input$bivar_mode, input$bivar_x, input$bivar_y,
+          session$clientData[[map_width_key]]
+        )
       },
-      update_map,
-      ignoreInit = TRUE
+      {
+        # Ensure the widget exists on the client before proxy updates.
+        w <- session$clientData[[map_width_key]]
+        req(is.finite(w) && w > 0)
+        update_map()
+      },
+      ignoreInit = FALSE
     )
 
     observeEvent(input$map_shape_click, {

@@ -593,21 +593,16 @@ server <- function(input, output, session) {
     proxy
   }
 
-  # Initial draw once the widget has been laid out on the client. We use
-  # `clientData` instead of `onFlushed()` so we stay inside a reactive context,
-  # and avoid relying on `*_bounds` (which may not fire on initial load).
-  observeEvent(session$clientData$output_overview_map_width, {
-    w <- session$clientData$output_overview_map_width
-    req(is.finite(w) && w > 0)
-    update_overview_map()
-  }, ignoreInit = TRUE, once = TRUE)
-
   observeEvent(
     {
-      list(input$metric, input$aqs_year, input$state_filter)
+      list(input$metric, input$aqs_year, input$state_filter, session$clientData$output_overview_map_width)
     },
-    update_overview_map,
-    ignoreInit = TRUE
+    {
+      w <- session$clientData$output_overview_map_width
+      req(is.finite(w) && w > 0)
+      update_overview_map()
+    },
+    ignoreInit = FALSE
   )
 
   observeEvent(active_fips5(), {
