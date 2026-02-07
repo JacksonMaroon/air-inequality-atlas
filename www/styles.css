@@ -17,15 +17,23 @@
 }
 
 /* Hide the global page sidebar on selected tabs (Model Lab, etc.) and
-   allow the main content to expand to full width. */
-body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout {
-  --_sidebar-width: 0px !important;
-  grid-template-columns: 1fr !important;
+   allow the main content to expand to full width.
+
+   Note: bslib's sidebar layout is grid-based and also manages collapse state
+   via a `.sidebar-collapsed` class. We toggle that class in JS for these tabs
+   (see app.R), then hide sidebar/toggles/resize handles here. */
+body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout > aside.sidebar,
+body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout > button.collapse-toggle,
+body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout > .bslib-sidebar-resize-handle {
+  display: none !important;
 }
 
-body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout > aside.sidebar,
-body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout > button.collapse-toggle {
-  display: none !important;
+/* When bslib collapses the sidebar, it pads the main area to leave room for the
+   (now hidden) collapse toggle. Remove that extra padding for a true full-width
+   layout on these tabs. */
+body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout.sidebar-collapsed > .main {
+  padding-left: var(--_padding) !important;
+  padding-right: var(--_padding) !important;
 }
 
 /* Leaflet maps: show a lightweight "Loading map..." overlay while Shiny is
