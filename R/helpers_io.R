@@ -61,10 +61,27 @@ bbox_to_lnglat <- function(bb) {
   vals <- suppressWarnings(as.numeric(bb[needed]))
   if (length(vals) != 4 || any(!is.finite(vals))) return(NULL)
 
+  # Ensure bounds are ordered (Leaflet requires SW then NE).
+  order_bounds <- function(v) {
+    if (length(v) != 4) return(v)
+    if (!all(is.finite(v))) return(v)
+    if (v[["lat1"]] > v[["lat2"]]) {
+      tmp <- v[["lat1"]]
+      v[["lat1"]] <- v[["lat2"]]
+      v[["lat2"]] <- tmp
+    }
+    if (v[["lng1"]] > v[["lng2"]]) {
+      tmp <- v[["lng1"]]
+      v[["lng1"]] <- v[["lng2"]]
+      v[["lng2"]] <- tmp
+    }
+    v
+  }
+
   # Default: assume bbox is x=lng, y=lat.
-  a <- c(lng1 = vals[[1]], lat1 = vals[[2]], lng2 = vals[[3]], lat2 = vals[[4]])
+  a <- order_bounds(c(lng1 = vals[[1]], lat1 = vals[[2]], lng2 = vals[[3]], lat2 = vals[[4]]))
   # Alternate: some environments can surface axis-order confusion for EPSG:4326.
-  b <- c(lng1 = vals[[2]], lat1 = vals[[1]], lng2 = vals[[4]], lat2 = vals[[3]])
+  b <- order_bounds(c(lng1 = vals[[2]], lat1 = vals[[1]], lng2 = vals[[4]], lat2 = vals[[3]]))
 
   is_valid <- function(v) {
     all(is.finite(v)) &&
