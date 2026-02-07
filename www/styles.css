@@ -27,3 +27,47 @@ body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout > aside.sidebar,
 body.hide-global-sidebar.has-page-sidebar .bslib-sidebar-layout > button.collapse-toggle {
   display: none !important;
 }
+
+/* Leaflet maps: show a lightweight "Loading map..." overlay while Shiny is
+   recalculating the output so users don't stare at a blank white box. */
+.leaflet.html-widget-output {
+  position: relative;
+}
+
+.leaflet.html-widget-output.recalculating::before,
+.leaflet.html-widget-output:empty::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 0, 0, 0.15);
+  border-top-color: rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%) rotate(0deg);
+  animation: atlas-spin 0.9s linear infinite;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.leaflet.html-widget-output.recalculating::after,
+.leaflet.html-widget-output:empty::after {
+  content: "Loading map...";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin-top: 26px;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 14px;
+  text-align: center;
+  z-index: 999;
+  pointer-events: none;
+}
+
+@keyframes atlas-spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
