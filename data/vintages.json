@@ -1,0 +1,21 @@
+{
+  "build_utc": "2026-02-07 01:33:09 UTC",
+  "geometry": {
+    "source": "cb_2023_us_county_500k",
+    "year": 2023
+  },
+  "aqs": {
+    "years": [2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023],
+    "anchor_year": 2023,
+    "params": ["88101", "44201"]
+  },
+  "places": {
+    "dataset": "swc5-untb",
+    "places_year": 2023,
+    "value_type": "Age-adjusted prevalence"
+  },
+  "svi": {
+    "year": 2022,
+    "file": "SVI_2022_US_county.csv"
+  }
+}

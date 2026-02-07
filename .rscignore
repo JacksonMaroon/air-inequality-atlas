@@ -1,0 +1,5 @@
+# Exclude ETL scripts + large caches from shinyapps.io bundles.
+data-raw
+
+# Dev-only files
+tests

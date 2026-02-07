@@ -1,0 +1,14 @@
+# R / renv
+.Rhistory
+.RData
+.Rproj.user/
+renv/library/
+
+# ETL caches (large; reproducible)
+data-raw/aqs/
+data-raw/tmp/
+data-raw/cache/
+
+# Shiny
+rsconnect/
+

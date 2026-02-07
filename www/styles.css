@@ -1,0 +1,18 @@
+/* Minimal styling to keep layout readable on laptops */
+
+.tab-pad {
+  padding-top: 8px;
+}
+
+.spacer {
+  height: 16px;
+}
+
+.callout {
+  background: #fff8e6;
+  border: 1px solid #f1d38a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
