@@ -529,7 +529,7 @@ server <- function(input, output, session) {
     head(df, 200)
   }, striped = TRUE, hover = TRUE, bordered = TRUE)
 
-  output$overview_map <- renderLeaflet({
+	  output$overview_map <- renderLeaflet({
     req(length(missing) == 0)
     geo <- filtered_geo()
     req(nrow(geo) > 0)
@@ -666,20 +666,23 @@ server <- function(input, output, session) {
     # Redraw the active outline after any full re-render without forcing this
     # output to depend on active_fips5().
     f <- isolate(active_fips5())
-    if (!is.null(f) && nchar(f) == 5) {
-      active_geo <- geo |>
-        dplyr::filter(.data$fips5 == f)
-      if (nrow(active_geo) > 0) {
-        m <- m |>
-          leaflet::addPolygons(
-            data = active_geo,
-            group = "active",
-            layerId = ~fips5,
-            color = "#000000",
-            weight = 2.5,
-            fillOpacity = 0,
-            fill = FALSE
-          )
+	    if (!is.null(f) && nchar(f) == 5) {
+	      active_geo <- geo |>
+	        dplyr::filter(.data$fips5 == f)
+	      if (nrow(active_geo) > 0) {
+	        m <- m |>
+	          leaflet::addPolygons(
+	            data = active_geo,
+	            group = "active",
+	            # IMPORTANT: do not reuse the base polygon layerId, or Leaflet will
+	            # replace the filled polygon with this outline (creating a blank
+	            # "hole" on the map).
+	            layerId = ~paste0("active_", fips5),
+	            color = "#000000",
+	            weight = 2.5,
+	            fillOpacity = 0,
+	            fill = FALSE
+	          )
       }
     }
 
@@ -692,11 +695,12 @@ server <- function(input, output, session) {
     m
   })
 
-  observeEvent(input$overview_map_shape_click, {
-    click <- input$overview_map_shape_click
-    if (is.null(click$id)) return()
-    active_fips5(click$id)
-  })
+	  observeEvent(input$overview_map_shape_click, {
+	    click <- input$overview_map_shape_click
+	    f <- extract_fips5(click$id)
+	    if (is.null(f)) return()
+	    active_fips5(f)
+	  })
 
   output$overview_active_county_note <- renderUI({
     req(length(missing) == 0)
@@ -709,10 +713,10 @@ server <- function(input, output, session) {
     tags$p(tags$b("Active county:"), row$label[[1]])
   })
 
-  update_overview_active_outline <- function() {
-    f <- active_fips5()
-    proxy <- leaflet::leafletProxy("overview_map", session = session) |>
-      leaflet::clearGroup("active")
+	  update_overview_active_outline <- function() {
+	    f <- active_fips5()
+	    proxy <- leaflet::leafletProxy("overview_map", session = session) |>
+	      leaflet::clearGroup("active")
     if (is.null(f) || nchar(f) != 5) return(proxy)
 
     geo <- filtered_geo()
@@ -720,17 +724,17 @@ server <- function(input, output, session) {
       dplyr::filter(.data$fips5 == f)
     if (nrow(active_geo) == 0) return(proxy)
 
-    proxy |>
-      leaflet::addPolygons(
-        data = active_geo,
-        group = "active",
-        layerId = ~fips5,
-        color = "#000000",
-        weight = 2.5,
-        fillOpacity = 0,
-        fill = FALSE
-      )
-  }
+	    proxy |>
+	      leaflet::addPolygons(
+	        data = active_geo,
+	        group = "active",
+	        layerId = ~paste0("active_", fips5),
+	        color = "#000000",
+	        weight = 2.5,
+	        fillOpacity = 0,
+	        fill = FALSE
+	      )
+	  }
 
   zoom_overview_to_active <- function() {
     f <- active_fips5()

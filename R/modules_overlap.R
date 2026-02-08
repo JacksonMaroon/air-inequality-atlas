@@ -196,29 +196,30 @@ mod_overlap_server <- function(id,
         )
     })
 
-    observeEvent(overlap_hotspots(), {
+	    observeEvent(overlap_hotspots(), {
       geo <- geo_sf()
       hot <- overlap_hotspots()
       ids <- hot$fips5
       hot_geo <- geo[geo$fips5 %in% ids, ]
 
-      leafletProxy("overlap_map", session = session) |>
-        clearGroup("hot") |>
-        addPolygons(
-          data = hot_geo,
-          group = "hot",
-          layerId = ~fips5,
-          color = "#b30000",
-          weight = 1,
-          fillColor = "#fb6a4a",
-          fillOpacity = 0.8
-        )
-    }, ignoreInit = TRUE)
+	      leafletProxy("overlap_map", session = session) |>
+	        clearGroup("hot") |>
+	        addPolygons(
+	          data = hot_geo,
+	          group = "hot",
+	          layerId = ~paste0("hot_", fips5),
+	          color = "#b30000",
+	          weight = 1,
+	          fillColor = "#fb6a4a",
+	          fillOpacity = 0.8
+	        )
+	    }, ignoreInit = TRUE)
 
-    observeEvent(input$overlap_map_shape_click, {
-      click <- input$overlap_map_shape_click
-      if (is.null(click$id)) return()
-      active_fips5(click$id)
-    })
-  })
-}
+	    observeEvent(input$overlap_map_shape_click, {
+	      click <- input$overlap_map_shape_click
+	      f <- extract_fips5(click$id)
+	      if (is.null(f)) return()
+	      active_fips5(f)
+	    })
+	  })
+	}

@@ -37,3 +37,11 @@ test_that("bbox_to_lnglat prefers positive latitudes when both variants are vali
   out <- bbox_to_lnglat(bb_swapped)
   expect_equal(unname(out), c(-79.0, 40.0, -71.0, 45.0))
 })
+
+test_that("extract_fips5 returns 5-digit county fips from overlay layerIds", {
+  expect_equal(extract_fips5("06037"), "06037")
+  expect_equal(extract_fips5("active_27007"), "27007")
+  expect_equal(extract_fips5("hot_55109"), "55109")
+  expect_true(is.null(extract_fips5(NULL)))
+  expect_true(is.null(extract_fips5("nope")))
+})

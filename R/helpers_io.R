@@ -118,3 +118,16 @@ leaflet_fit_bounds_safe <- function(map,
 
   leaflet::fitBounds(map, args[["lng1"]], args[["lat1"]], args[["lng2"]], args[["lat2"]])
 }
+
+# Leaflet layerIds for polygons must be unique per-map. We sometimes add overlay
+# layers (e.g., active outline) that prefix the county fips5. This helper pulls
+# the underlying 5-digit fips code back out of any layerId string.
+extract_fips5 <- function(x) {
+  if (is.null(x)) return(NULL)
+  x <- as.character(x)
+  if (length(x) != 1 || !nzchar(x)) return(NULL)
+
+  m <- regmatches(x, regexpr("[0-9]{5}", x))
+  if (length(m) != 1 || !nzchar(m)) return(NULL)
+  m
+}

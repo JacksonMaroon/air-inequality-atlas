@@ -287,23 +287,23 @@ mod_atlas_server <- function(id,
 
       # Redraw the active outline after any full re-render without forcing this
       # output to depend on active_fips5().
-      f <- shiny::isolate(active_fips5())
-      if (!is.null(f) && nchar(f) == 5) {
-        active_geo <- geo |>
-          dplyr::filter(.data$fips5 == f)
-        if (nrow(active_geo) > 0) {
-          m <- m |>
-            leaflet::addPolygons(
-              data = active_geo,
-              group = "active",
-              layerId = ~fips5,
-              color = "#000000",
-              weight = 2.5,
-              fillOpacity = 0,
-              fill = FALSE
-            )
-        }
-      }
+	      f <- shiny::isolate(active_fips5())
+	      if (!is.null(f) && nchar(f) == 5) {
+	        active_geo <- geo |>
+	          dplyr::filter(.data$fips5 == f)
+	        if (nrow(active_geo) > 0) {
+	          m <- m |>
+	            leaflet::addPolygons(
+	              data = active_geo,
+	              group = "active",
+	              layerId = ~paste0("active_", fips5),
+	              color = "#000000",
+	              weight = 2.5,
+	              fillOpacity = 0,
+	              fill = FALSE
+	            )
+	        }
+	      }
 
       # View: national vs state subset.
       bb <- sf::st_bbox(geo)
@@ -319,10 +319,10 @@ mod_atlas_server <- function(id,
       m
     })
 
-    update_active_outline <- function() {
-      f <- active_fips5()
-      proxy <- leaflet::leafletProxy("map", session = session) |>
-        leaflet::clearGroup("active")
+	    update_active_outline <- function() {
+	      f <- active_fips5()
+	      proxy <- leaflet::leafletProxy("map", session = session) |>
+	        leaflet::clearGroup("active")
       if (is.null(f) || nchar(f) != 5) return(proxy)
 
       geo <- geo_sf()
@@ -330,17 +330,17 @@ mod_atlas_server <- function(id,
         dplyr::filter(.data$fips5 == f)
       if (nrow(active_geo) == 0) return(proxy)
 
-      proxy |>
-        leaflet::addPolygons(
-          data = active_geo,
-          group = "active",
-          layerId = ~fips5,
-          color = "#000000",
-          weight = 2.5,
-          fillOpacity = 0,
-          fill = FALSE
-        )
-    }
+	      proxy |>
+	        leaflet::addPolygons(
+	          data = active_geo,
+	          group = "active",
+	          layerId = ~paste0("active_", fips5),
+	          color = "#000000",
+	          weight = 2.5,
+	          fillOpacity = 0,
+	          fill = FALSE
+	        )
+	    }
 
     zoom_to_active <- function() {
       f <- active_fips5()
@@ -356,11 +356,12 @@ mod_atlas_server <- function(id,
       invisible(NULL)
     }
 
-    observeEvent(input$map_shape_click, {
-      click <- input$map_shape_click
-      if (is.null(click$id)) return()
-      active_fips5(click$id)
-    })
+	    observeEvent(input$map_shape_click, {
+	      click <- input$map_shape_click
+	      f <- extract_fips5(click$id)
+	      if (is.null(f)) return()
+	      active_fips5(f)
+	    })
 
     observeEvent(active_fips5(), {
       update_active_outline()
