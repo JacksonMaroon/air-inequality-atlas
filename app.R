@@ -247,14 +247,30 @@ server <- function(input, output, session) {
       transmute(label = label, fips5 = fips5)
     choices <- c("None (clear selection)" = COUNTY_NONE_VALUE, stats::setNames(choices_df$fips5, choices_df$label))
 
+    # Prefer the active county selection (if valid) so the search and active
+    # county stay linked even if the state filter changes.
+    active <- isolate(active_fips5())
+    active_ok <- !is.null(active) &&
+      length(active) == 1 &&
+      nzchar(active) &&
+      active %in% choices_df$fips5
+
     sel <- input$county_search
     sel_ok <- !is.null(sel) && length(sel) == 1 && nzchar(sel) && sel %in% choices_df$fips5
-    if (sel_ok) {
+    if (active_ok) {
+      updateSelectizeInput(session, "county_search", choices = choices, selected = active, server = TRUE)
+    } else if (sel_ok) {
       updateSelectizeInput(session, "county_search", choices = choices, selected = sel, server = TRUE)
     } else {
       # Clear selection when the current selection is invalid for the state filter.
       # Use character(0) (NULL would be ignored by updateSelectizeInput()).
       updateSelectizeInput(session, "county_search", choices = choices, selected = character(0), server = TRUE)
+    }
+
+    # If the active county isn't part of this state filter, clear it so the UI
+    # doesn't show an "active" county that can't be displayed/highlighted.
+    if (!active_ok && !is.null(active) && length(active) == 1 && nzchar(active) && input$state_filter != "ALL") {
+      active_fips5(NULL)
     }
   }, ignoreInit = TRUE)
 
@@ -267,6 +283,8 @@ server <- function(input, output, session) {
       updateSelectizeInput(session, "county_search", selected = character(0), server = TRUE)
       return()
     }
+    # Avoid redundant updates (e.g., when we programmatically sync selection).
+    if (identical(isolate(active_fips5()), f)) return()
     active_fips5(f)
   }, ignoreInit = TRUE)
 
@@ -716,6 +734,19 @@ server <- function(input, output, session) {
   }
 
   observeEvent(active_fips5(), {
+    # Keep the county search dropdown in sync with the active county.
+    f <- active_fips5()
+    current_sel <- input$county_search
+    if (is.null(f) || length(f) != 1 || !nzchar(f)) {
+      if (!is.null(current_sel) && length(current_sel) == 1 && nzchar(current_sel)) {
+        updateSelectizeInput(session, "county_search", selected = character(0), server = TRUE)
+      }
+    } else {
+      if (!identical(current_sel, f)) {
+        updateSelectizeInput(session, "county_search", selected = f, server = TRUE)
+      }
+    }
+
     update_overview_active_outline()
     zoom_overview_to_active()
   }, ignoreInit = TRUE)
