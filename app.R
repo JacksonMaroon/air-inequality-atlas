@@ -234,9 +234,7 @@ server <- function(input, output, session) {
 
   active_fips5 <- reactiveVal(NULL)
 
-  observeEvent(input$state_filter, {
-    req(length(missing) == 0)
-
+  compute_county_search_choices <- function() {
     cm <- county_master
     if (!is.null(input$state_filter) && input$state_filter != "ALL") {
       cm <- cm |> dplyr::filter(.data$state_abbr == input$state_filter)
@@ -245,7 +243,17 @@ server <- function(input, output, session) {
     choices_df <- cm |>
       arrange(label) |>
       transmute(label = label, fips5 = fips5)
+
     choices <- c("None (clear selection)" = COUNTY_NONE_VALUE, stats::setNames(choices_df$fips5, choices_df$label))
+    list(choices_df = choices_df, choices = choices)
+  }
+
+  observeEvent(input$state_filter, {
+    req(length(missing) == 0)
+
+    out <- compute_county_search_choices()
+    choices_df <- out$choices_df
+    choices <- out$choices
 
     # Prefer the active county selection (if valid) so the search and active
     # county stay linked even if the state filter changes.
@@ -739,11 +747,13 @@ server <- function(input, output, session) {
     current_sel <- input$county_search
     if (is.null(f) || length(f) != 1 || !nzchar(f)) {
       if (!is.null(current_sel) && length(current_sel) == 1 && nzchar(current_sel)) {
-        updateSelectizeInput(session, "county_search", selected = character(0), server = TRUE)
+        out <- compute_county_search_choices()
+        updateSelectizeInput(session, "county_search", choices = out$choices, selected = character(0), server = TRUE)
       }
     } else {
       if (!identical(current_sel, f)) {
-        updateSelectizeInput(session, "county_search", selected = f, server = TRUE)
+        out <- compute_county_search_choices()
+        updateSelectizeInput(session, "county_search", choices = out$choices, selected = f, server = TRUE)
       }
     }
 
